@@ -1,7 +1,14 @@
+# Imports
 import torch
 import numpy as np
 from transformers import ViTImageProcessor, ViTForImageClassification
 
+# Main class
+"""
+model_names: 
+1. "WinKawaks/vit-tiny-patch16-224"
+2. "WinKawaks/vit-small-patch16-224"
+"""
 class Custom_model(torch.nn.Module):
     def __init__(self, device, name="google/vit-large-patch16-384"):
         super().__init__()
