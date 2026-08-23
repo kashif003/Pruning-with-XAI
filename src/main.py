@@ -14,7 +14,9 @@ import wandb
 load_dotenv()
 WANDB_API_KEY = os.getenv("WANDB_KEY")
 wandb.login(key=WANDB_API_KEY)
+MODEL_NAME = "google/vit-large-patch16-384"
 
+print("[INFO] using model:", MODEL_NAME)
 
 parser = argparse.ArgumentParser()
 
@@ -25,7 +27,7 @@ args = parser.parse_args()
 cfg = args.config
 wandb.init(
     project="GMAR++ with pruning",
-    name=f"legrad_score_{cfg}",
+    name=f"GMAR++_HR_{cfg}",
     config={
         "Pruning precentage": cfg
     }
@@ -33,21 +35,27 @@ wandb.init(
 
 layer_list, head_list = get_layers_and_heads(args.score_path, percentage=cfg)
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 print("[INFO] Device:", device)
 
 
 # before pruning
 dummy_input = torch.randn(1, 3, 384, 384).to(device)
-custom_model = Custom_model(device =device)
+custom_model = Custom_model(name = MODEL_NAME,device =device)
+
 model = custom_model.get_model().to(device)
 bflops, bparams = FLOPS_and_PARAMS(model, dummy_input)
 
 
 model_2 = prune_vit_heads(model, layer_indices=layer_list, heads_to_prune_list=head_list, device=device)
-processor = AutoImageProcessor.from_pretrained("google/vit-large-patch16-384")
+processor = AutoImageProcessor.from_pretrained(MODEL_NAME)
 # after pruning
 aflops, aparams = FLOPS_and_PARAMS(model_2, dummy_input)
+print("BEFORE :", cfg)
+print(bparams)
+
+print("AFTER:", cfg)
+print(aparams)
 wandb.log({"FLOPS before Pruning":bflops, "PARAMS before Pruning":bparams})
 wandb.log({"FLOPS after Pruning":aflops, "PARAMS after Pruning":aparams})
 
@@ -55,9 +63,13 @@ wandb.log({"FLOPS after Pruning":aflops, "PARAMS after Pruning":aparams})
 from get_score.get_baseline_accuracy import validate
 
 accuracy = validate(model_2)
-wandb.log({"Final Accuracy": accuracy})
 
+wandb.log({"Final Accuracy": accuracy["final_accuracy"],"harmonic_mean_accuracy": accuracy["harmonic_mean_accuracy"]})
 
-
-# need to work on the clustering on the rtlc.
-    # finish it by today
+# per-class breakdown as a table
+class_ids = list(range(len(accuracy["class_accuracy"])))
+table = wandb.Table(
+   columns=["class_id", "accuracy", "total_samples"],
+   data=[[i, accuracy["class_accuracy"][i].item(), accuracy["class_total"][i].item()] for i in class_ids]
+)
+wandb.log({"class_wise_accuracy": table})

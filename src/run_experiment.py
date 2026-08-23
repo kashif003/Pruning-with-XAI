@@ -5,7 +5,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--score_path", type=str, required=True)
 args = parser.parse_args()
 
-configs = [60]
+configs = [10, 20, 30, 40, 50, 60]
 
 for cfg in configs:
 
