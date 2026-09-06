@@ -1,7 +1,7 @@
 import torch
 import torch_pruning as tp
 from transformers import AutoImageProcessor, AutoModelForImageClassification 
-from vit import Custom_model   
+from .vit import Custom_model   
 from thop import profile, clever_format
 
 def prune_vit_heads(model, layer_indices, heads_to_prune_list, device):

@@ -11,9 +11,41 @@ from ..utils import get_jpeg_images, get_img_tensor
 from ..vit import Custom_model
 
 #-- 
+import argparse
+parser = argparse.ArgumentParser()
 
-custom_model = Custom_model("cuda:7")
-processor = AutoImageProcessor.from_pretrained("google/vit-large-patch16-384")
+parser.add_argument("--model_name", type=str, required=True)
+parser.add_argument("--saving_dir", type=str, required=True)
+parser.add_argument("--device", type=str, required=True)
+
+args = parser.parse_args()
+
+MODEL_NAME = args.model_name
+GPU_NAME = args.device
+SAVING_DIR = args.saving_dir
+
+if SAVING_DIR == "tiny":
+    saving_dir_name = "scores/tiny/GMAR_score.json"
+elif SAVING_DIR == "small":
+    saving_dir_name = "scores/small/GMAR_score.json"
+else:
+    saving_dir_name = f"scores/{SAVING_DIR}/GMAR_score.json"
+
+'''
+VIT_MODELS:
+facebook/deit-tiny-patch16-224
+google/vit-large-patch16-384
+
+
+WinKawaks/vit-tiny-patch16-224
+WinKawaks/vit-small-patch16-224
+'''
+
+NAME = MODEL_NAME
+DEVICE = GPU_NAME if torch.cuda.is_available() else "cpu"
+
+custom_model = Custom_model(device = DEVICE, name= NAME)
+processor = AutoImageProcessor.from_pretrained(NAME)
 images = get_jpeg_images("imagenet_val_1000")
 
 
@@ -40,7 +72,7 @@ global_pruning_scores = {}
 for idx, image in tqdm(enumerate(images)):
     torch.cuda.empty_cache()
     img_tensor = get_img_tensor(processor, image)
-    output, attention, gmar_grads = custom_model.gmar_forward_pass(img_tensor.pixel_values.to("cuda:7"))
+    output, attention, gmar_grads = custom_model.gmar_forward_pass(img_tensor.pixel_values.to(DEVICE))
 
     global_pruning_scores = accumulate_gmar_scores(gmar_grads, global_pruning_scores)
 
@@ -53,5 +85,5 @@ json_ready_scores = {
     for layer_idx, scores in global_pruning_scores.items()
 }
 
-with open("scores/GMAR_score.json", "w") as file:
+with open(saving_dir_name, "w") as file:
     json.dump(json_ready_scores, file, indent=4)

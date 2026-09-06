@@ -20,11 +20,13 @@ from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 # --- Model & Image Loading Utilities ---
 
-def load_model(name: str):
+def load_model_transformers(name: str):
     """Loads a model and its corresponding image processor from Hugging Face."""
     processor = AutoImageProcessor.from_pretrained(name) 
     model = AutoModelForImageClassification.from_pretrained(name)
     return processor, model
+
+
 
 
 def get_img_tensor(processor, image_path, return_logits=False):
