@@ -1,16 +1,17 @@
-# this file will be used to get the score from the GMAR++.
+# this file will be used to get the score from LRP.
 
 from collections import defaultdict
 import json
 import numpy as np
 import torch
 from tqdm import tqdm
-from transformers import AutoImageProcessor, AutoModelForImageClassification    
+from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 from ..utils import get_jpeg_images, get_img_tensor
 from ..vit import Custom_model
 
-#-- 
+# --
+
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -26,44 +27,30 @@ GPU_NAME = args.device
 SAVING_DIR = args.saving_dir
 
 if SAVING_DIR == "tiny":
-    saving_dir_name = "scores/tiny/GMAR++_score.json"
+    saving_dir_name = "scores/tiny/LRP_score.json"
 elif SAVING_DIR == "small":
-    saving_dir_name = "scores/small/GMAR++_score.json"
+    saving_dir_name = "scores/small/LRP_score.json"
 else:
-    saving_dir_name = f"scores/{SAVING_DIR}/GMAR++_score.json"
+    saving_dir_name = f"scores/{SAVING_DIR}/LRP_score.json"
 
-'''
-VIT_MODELS:
-facebook/deit-tiny-patch16-224
-google/vit-large-patch16-384
-
-WinKawaks/vit-tiny-patch16-224
-WinKawaks/vit-small-patch16-224
-'''
-
-NAME = MODEL_NAME
-DEVICE = GPU_NAME if torch.cuda.is_available() else "cpu"
-
-print("[INFO] MODEL NAME:", NAME)
-print("[INFO] DEVICE:", DEVICE)
-custom_model = Custom_model(device = DEVICE, name= NAME)
-processor = AutoImageProcessor.from_pretrained(NAME)
+custom_model = Custom_model(GPU_NAME, MODEL_NAME)
+processor = AutoImageProcessor.from_pretrained(MODEL_NAME)
 images = get_jpeg_images("imagenet_val_1000")
 
-
-def accumulate_gmarpp_scores(gmarpp_gradients, final_score_dict=None):
+print(saving_dir_name)
+def accumulate_lrp_scores(lrp_relevances, final_score_dict=None):
     """
-    Accumulates pre-calculated 1D layer-wise LeGrad head scores 
+    Accumulates pre-calculated 1D layer-wise LRP head relevance scores
     across training iterations or evaluation datasets.
     """
     if final_score_dict is None:
         final_score_dict = {}
 
-    for layer_idx, grad_scores in gmarpp_gradients.items():
+    for layer_idx, relevance_scores in lrp_relevances.items():
         if layer_idx in final_score_dict:
-            final_score_dict[layer_idx] += grad_scores
+            final_score_dict[layer_idx] += relevance_scores
         else:
-            final_score_dict[layer_idx] = np.copy(grad_scores)
+            final_score_dict[layer_idx] = np.copy(relevance_scores)
 
     return final_score_dict
 
@@ -74,9 +61,11 @@ global_pruning_scores = {}
 for idx, image in tqdm(enumerate(images)):
     torch.cuda.empty_cache()
     img_tensor = get_img_tensor(processor, image)
-    output, attention, gmarpp_grads = custom_model.gmarpp_forward_pass(img_tensor.pixel_values.to(DEVICE))
+    output, attention, lrp_relevance = custom_model.lrp_forward_pass(
+        img_tensor.pixel_values.to(GPU_NAME)
+    )
 
-    global_pruning_scores = accumulate_gmarpp_scores(gmarpp_grads, global_pruning_scores)
+    global_pruning_scores = accumulate_lrp_scores(lrp_relevance, global_pruning_scores)
 
 
 print("[INFO] Converting tensors to native Python formats for JSON serialization...")

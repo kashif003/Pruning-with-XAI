@@ -46,7 +46,7 @@ _ATTNLRP_PATCHED = False  # module-level guard so we only patch once
 
 
 class Custom_model(torch.nn.Module):
-    def __init__(self, device, name="google/vit-large-patch16-384"):
+    def __init__(self, device, name):
         super().__init__()
         self.model_name = name
         self.device = device

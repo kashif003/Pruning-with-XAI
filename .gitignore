@@ -12,6 +12,7 @@ __pycache__/
 src/prunning/venv/
 venv
 src/prunning/.env
+.venv
 # Local logs and training artifacts
 *.log
 src/prunning/Global_score.png
@@ -20,3 +21,5 @@ src/prunning/*_scores.json
 # Local Datasets / Large Downloads
 src/prunning/imagenet_val_1000/
 src/prunning/wandb
+imagenet_val_1000/
+wandb/

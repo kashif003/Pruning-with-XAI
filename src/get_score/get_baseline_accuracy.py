@@ -1,15 +1,18 @@
 import torch
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoImageProcessor
+from transformers import default_data_collator # Added collator
+from ..utils import load_model_transformers
 from tqdm import tqdm
+from ..config import MODEL_NAME, GPU_NAME
 import wandb
 
 # 1. Setup Device
-device = "cuda:6" if torch.cuda.is_available() else "cpu"
+device = torch.device(GPU_NAME if torch.cuda.is_available() else "cpu")
 
 # 2. Load Model and Processor
-processor = AutoImageProcessor.from_pretrained("google/vit-large-patch16-384")
+processor, model = load_model_transformers(MODEL_NAME) 
+model.to(device) # Ensure model is on device
 
 # 3. Load Streaming Dataset
 dataset = load_dataset(
@@ -21,7 +24,7 @@ dataset = load_dataset(
 def transform(examples):
     rgb_images = [img.convert("RGB") for img in examples["image"]]
     inputs = processor(rgb_images, return_tensors="pt")
-    inputs["labels"] = torch.tensor(examples["label"])
+    inputs["labels"] = examples["label"] # Keep as list, collator handles tensor conversion
     return inputs
 
 processed_dataset = dataset.map(
@@ -30,22 +33,29 @@ processed_dataset = dataset.map(
     remove_columns=["image", "label"]
 )
 
-batch_size = 128
-val_loader = DataLoader(processed_dataset, batch_size=batch_size)
+# FIXED: Lowered batch size for streaming, added workers, added collator
+batch_size = 512 
+val_loader = DataLoader(
+    processed_dataset, 
+    batch_size=batch_size, 
+    num_workers=14, # Multiprocessing for faster I/O max = 14
+    collate_fn=default_data_collator 
+)
 
 NUM_CLASSES = 1000  # ImageNet-1K
 
-def validate(model):
+def validate(model, device):
     model.eval()
     total_correct = 0
     total_samples = 0
 
-    # per-class counters
     class_correct = torch.zeros(NUM_CLASSES, dtype=torch.long)
     class_total = torch.zeros(NUM_CLASSES, dtype=torch.long)
 
     print("Starting data stream...\n")
+    print("[INFO] Current batch size:", val_loader.batch_size)
     pbar = tqdm(val_loader, desc="Evaluating")
+    
     with torch.no_grad():
         for batch in pbar:
             images = batch["pixel_values"].to(device)
@@ -63,7 +73,6 @@ def validate(model):
             total_correct += batch_correct
             total_samples += labels.size(0)
 
-            # accumulate per-class counts (move to CPU for indexing)
             labels_cpu = labels.cpu()
             correct_cpu = correct_mask.cpu()
 
@@ -77,12 +86,10 @@ def validate(model):
 
     final_accuracy = (total_correct / total_samples) * 100
 
-    # class-wise accuracy (only for classes actually seen)
     seen_mask = class_total > 0
     class_accuracy = torch.zeros(NUM_CLASSES, dtype=torch.float)
     class_accuracy[seen_mask] = class_correct[seen_mask].float() / class_total[seen_mask].float()
 
-    # harmonic mean over classes that were seen and have nonzero accuracy
     valid_acc = class_accuracy[seen_mask]
     if (valid_acc == 0).any():
         harmonic_mean = torch.tensor(0.0)
@@ -92,7 +99,7 @@ def validate(model):
 
     return {
         "final_accuracy": final_accuracy,
-        "class_accuracy": class_accuracy,       # tensor of shape [NUM_CLASSES]
-        "class_total": class_total,             # samples seen per class
+        "class_accuracy": class_accuracy,       
+        "class_total": class_total,             
         "harmonic_mean_accuracy": harmonic_mean.item() * 100
     }
