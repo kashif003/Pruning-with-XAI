@@ -13,3 +13,4 @@ tqdm
 numpy
 matplotlib
 huggingface_hub
+scipy

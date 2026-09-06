@@ -4,14 +4,34 @@ from collections import defaultdict
 import json
 import torch
 
-from ..vit import CustomViT
+from ..vit import Custom_model
 
 #-- 
 
-model = CustomViT().model
+import argparse
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--model_name", type=str, required=True)
+parser.add_argument("--saving_dir", type=str, required=True)
+parser.add_argument("--device", type=str, required=True)
+
+args = parser.parse_args()
+
+MODEL_NAME = args.model_name
+GPU_NAME = args.device
+SAVING_DIR = args.saving_dir
+
+if SAVING_DIR == "tiny":
+    saving_dir_name = "scores/tiny/mag_score.json"
+elif SAVING_DIR == "small":
+    saving_dir_name = "scores/small/mag_score.json"
+else:
+    saving_dir_name = f"scores/{SAVING_DIR}/mag_score.json"
+
+model = Custom_model(GPU_NAME, MODEL_NAME).model
 score = defaultdict(list)
 
-for i, layer in enumerate(model.vit.encoder.layer):
+for i, layer in enumerate(model.encoder.layer):
     layer_attention = layer.attention.attention
     
     # Weights of query, key, and value
@@ -41,5 +61,5 @@ for i, layer in enumerate(model.vit.encoder.layer):
     # Store the list of magnitudes for this layer
     score[f"{i}"] = layer_magnitudes
 
-with open("scores/mag_score.json", "w") as f:
+with open(SAVING_DIR, "w") as f:
     json.dump(score, f, indent=4)
