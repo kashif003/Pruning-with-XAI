@@ -2,19 +2,16 @@
 
 
 # loading the model
+from src.cnn.cnn import Custom_model
 
-from torchvision.models import resnet50
+model = Custom_model(device="cpu", name = "resnet50")
 
-def load_resnet50_model(name="ResNet50_Weights.DEFAULT"):
-    return resnet50(name)
 
-model = load_resnet50_model()
+import torch
 
-from src.utils import get_img_tensor
-from src.get_score.get_baseline_accuracy import validate
-
-accuracy = validate(model, "cpu")
-print(accuracy)
-print(model)
+tensor  = torch.randn((1,3,224,224))
+print("input shape:",tensor.shape)
+accuracy , act, grads= model.forward_pass(tensor)
+print("output shape:",accuracy.shape, act.keys(), grads.keys())
 print("[INFO] Run completed!")
 
