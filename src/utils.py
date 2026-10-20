@@ -425,3 +425,92 @@ def get_layers_and_heads(path, percentage=10, score_type="global"):
             combined[int(layer)].append(head_idx)
 
     return list(combined.keys()), list(combined.values())
+
+
+
+    # CNN
+
+    import json
+import torch
+from torchvision import models
+
+
+def load_cnn_model(model_name):
+    """
+    CNN equivalent of load_model_transformers -- no processor needed,
+    torchvision ResNets take raw normalized tensors directly.
+    """
+    if model_name == "resnet50":
+        return models.resnet50(weights="IMAGENET1K_V2")
+    elif model_name == "resnet18":
+        return models.resnet18(weights="IMAGENET1K_V1")
+    else:
+        raise ValueError(f"Unknown model: {model_name} (use 'resnet50' or 'resnet18')")
+
+
+def get_layers_and_channels(score_path, percentage, min_keep=1):
+    """
+    CNN equivalent of get_layers_and_heads.
+
+    Reads a {layer_name: [channel_scores...]} JSON (the shape every
+    get_score_*.py script in src/cnn/ produces) and selects the bottom
+    `percentage`% of channels GLOBALLY -- i.e. every channel in the
+    network is ranked together on one list, not separately per layer.
+    Layers with more low-scoring channels will therefore lose more of
+    their channels than layers whose channels all score highly.
+
+    Args:
+        score_path: path to a score JSON, e.g. "scores/resnet50/GMAR_score.json"
+        percentage: int/float, e.g. 30 for "prune the bottom 30% globally"
+        min_keep: minimum channels to leave in any single layer, so a
+                  layer is never pruned down to zero output channels
+                  (which would break the network entirely). Default 1.
+
+    Returns:
+        layer_names: list of layer names that have >=1 channel to prune
+        channels_to_prune_list: list of lists, channel indices to prune
+                                 for the corresponding layer in layer_names
+                                 (parallel arrays -- same contract prune_cnn_channels expects)
+    """
+    with open(score_path, "r") as f:
+        scores = json.load(f)
+
+    # Flatten into one global list of (layer_name, channel_idx, score)
+    all_entries = []
+    for layer_name, channel_scores in scores.items():
+        for channel_idx, score in enumerate(channel_scores):
+            all_entries.append((layer_name, channel_idx, score))
+
+    # Sort ascending by score -- lowest-scoring (least important) channels first
+    all_entries.sort(key=lambda x: x[2])
+
+    total_channels = len(all_entries)
+    num_to_prune = int(total_channels * (percentage / 100.0))
+    candidates = all_entries[:num_to_prune]
+
+    # Group candidate channels back by layer
+    per_layer_prune = {}
+    for layer_name, channel_idx, _ in candidates:
+        per_layer_prune.setdefault(layer_name, []).append(channel_idx)
+
+    # Safety: never prune a layer down to zero (or below min_keep) channels
+    layer_total_channels = {
+        layer_name: len(channel_scores) for layer_name, channel_scores in scores.items()
+    }
+
+    layer_names = []
+    channels_to_prune_list = []
+    for layer_name, channel_idxs in per_layer_prune.items():
+        max_prunable = layer_total_channels[layer_name] - min_keep
+        if max_prunable <= 0:
+            continue  # layer too small to prune at all
+        if len(channel_idxs) > max_prunable:
+            # Keep the lowest-scoring ones up to the safe limit
+            # (channel_idxs is already in ascending-score order per layer
+            # because `candidates` was globally sorted before grouping)
+            channel_idxs = channel_idxs[:max_prunable]
+
+        layer_names.append(layer_name)
+        channels_to_prune_list.append(channel_idxs)
+
+    return layer_names, channels_to_prune_list

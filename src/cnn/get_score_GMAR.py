@@ -1,9 +1,9 @@
-# this file will be used to get the GMAR score for CNN (ResNet) models.
-
+# Imports
 import json
 import numpy as np
 import torch
 from tqdm import tqdm
+from PIL import Image
 from torchvision import transforms
 
 from ..utils import get_jpeg_images, get_img_tensor
@@ -92,7 +92,7 @@ global_pruning_scores = {}
 for idx, image in tqdm(enumerate(images)):
     torch.cuda.empty_cache()
 
-    img_tensor = preprocess(image).unsqueeze(0)  # -> [1, 3, 224, 224]
+    img_tensor = preprocess(Image.open(image).convert("RGB")).unsqueeze(0)  # -> [1, 3, 224, 224]
     output, activations, gradients = custom_model.forward_pass(img_tensor.to(DEVICE))
 
     gmar_scores = compute_gmar_scores(gradients)

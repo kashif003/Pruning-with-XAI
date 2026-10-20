@@ -26,8 +26,8 @@ def prune_cnn_channels(model, layer_names, channels_to_prune_list, device, img_s
         device: torch device string
         img_size: input resolution (224 for standard ImageNet ResNets)
     """
-    model.eval()
     target_model = model.model if hasattr(model, 'model') else model
+    target_model.eval()
 
     for i, layer_name in enumerate(layer_names):
         current_layer_channels = channels_to_prune_list[i]
@@ -56,7 +56,12 @@ def prune_cnn_channels(model, layer_names, channels_to_prune_list, device, img_s
 
 def FLOPS_and_PARAMS(model, input_tensor):
     """Calculates and formats FLOPs and Parameters."""
+    # Unwrap Custom_model if it was passed in directly instead of the
+    # raw nn.Module -- thop.profile needs a real nn.Module (it checks
+    # model.training internally), which Custom_model doesn't have.
+    target_model = model.model if hasattr(model, 'model') else model
+
     # We use verbose=False to keep the console clean
-    flops, params = profile(model, inputs=(input_tensor,), verbose=False)
+    flops, params = profile(target_model, inputs=(input_tensor,), verbose=False)
     flops, params = clever_format([flops, params], "%.3f")
     return flops, params

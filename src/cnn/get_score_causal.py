@@ -31,7 +31,7 @@ BATCH_SIZE = 32
 
 custom_model = Custom_model(device=DEVICE, name=NAME)
 model = custom_model.model
-images = get_jpeg_images("src.get_score.imagenet_val_1000")
+images = get_jpeg_images("imagenet_val_1000")
 
 preprocess = transforms.Compose([
     transforms.Resize(256),
