@@ -1,0 +1,2 @@
+nohup: ignoring input
+/home/jovyan/Pruning-with-XAI/.venv/bin/python3: Error while finding module specification for 'src.run_experiment.py' (ModuleNotFoundError: No module named 'src'). Try using 'src.run_experiment' instead of 'src.run_experiment.py' as the module name.
